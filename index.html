@@ -42,14 +42,45 @@ function animateTo(goal){if(!turn)return;cancelAnimationFrame(anim);const from=t
 function buttonFlip(dir){if(turn)return;showTurn(dir);animateTo(1)}
 document.getElementById('prev').onclick=()=>buttonFlip(-1);document.getElementById('next').onclick=()=>buttonFlip(1);
 document.getElementById('today').onclick=()=>{if(turn)return;offset=0;render()};
-// Native touch tracking is used so the calendar stays fixed even when dragging across a textarea.
-book.addEventListener('touchstart',e=>{if(turn||e.touches.length!==1){gesture=null;return}const t=e.touches[0];gesture={x:t.clientX,y:t.clientY,lastX:t.clientX,lastTime:performance.now(),velocity:0,active:false,dir:0}},{passive:true});
-book.addEventListener('touchmove',e=>{if(!gesture||e.touches.length!==1)return;const t=e.touches[0],dx=t.clientX-gesture.x,dy=t.clientY-gesture.y;
- if(!gesture.active){if(Math.abs(dx)<9)return;if(Math.abs(dx)<Math.abs(dy)*1.15)return;gesture.dir=dx<0?1:-1;gesture.active=true;showTurn(gesture.dir)}
- if(!turn)return;e.preventDefault();const now=performance.now(),dt=Math.max(1,now-gesture.lastTime);gesture.velocity=(t.clientX-gesture.lastX)/dt;gesture.lastX=t.clientX;gesture.lastTime=now;
- const travel=Math.max(120,book.clientWidth*.72);setProgress(Math.abs(dx)/travel)},{passive:false});
-book.addEventListener('touchend',()=>{if(!gesture)return;const g=gesture;gesture=null;if(g.active&&turn)animateTo(turn.progress>.33||(Math.abs(g.velocity)>.65&&Math.sign(g.velocity)===(g.dir===1?-1:1))?1:0)},{passive:true});
-book.addEventListener('touchcancel',()=>{gesture=null;if(turn)animateTo(0)},{passive:true});
+// Capture touches before the editable textareas handle them. Keep the DOM under
+// the finger intact and update the turning page on EVERY move, not on release.
+const activeTouches=new Map();
+function beginTouch(e){
+ if(turn||e.touches.length!==1||!book.contains(e.target)){gesture=null;return}
+ const t=e.touches[0];
+ gesture={id:t.identifier,x:t.clientX,y:t.clientY,lastX:t.clientX,lastTime:performance.now(),velocity:0,active:false,dir:0};
+}
+function moveTouch(e){
+ const g=gesture;if(!g)return;
+ const t=Array.from(e.touches).find(t=>t.identifier===g.id);if(!t)return;
+ const dx=t.clientX-g.x,dy=t.clientY-g.y;
+ if(!g.active){
+   if(Math.abs(dx)<12||Math.abs(dx)<Math.abs(dy)*1.15)return;
+   g.dir=dx<0?1:-1;g.active=true;
+   // Prevent Safari's textarea selection and viewport movement only once
+   // the user has clearly started a horizontal page-turn gesture.
+   showTurn(g.dir);
+ }
+ if(e.cancelable)e.preventDefault();
+ const now=performance.now(),dt=Math.max(1,now-g.lastTime);
+ g.velocity=(t.clientX-g.lastX)/dt;g.lastX=t.clientX;g.lastTime=now;
+ // One page-width of travel is one complete turn. No easing while dragging.
+ const travel=Math.max(110,book.getBoundingClientRect().width*.70);
+ setProgress(Math.min(1,Math.abs(dx)/travel));
+}
+function endTouch(e){
+ if(!gesture)return;
+ const g=gesture;
+ if(e.changedTouches.length&&!Array.from(e.changedTouches).some(t=>t.identifier===g.id))return;
+ gesture=null;
+ if(g.active&&turn)animateTo(turn.progress>.42||(Math.abs(g.velocity)>.85&&Math.sign(g.velocity)===(g.dir===1?-1:1))?1:0);
+}
+// Capture on document, not on the book: iOS textareas sometimes swallow
+// bubbling touchmove events. These listeners survive movement over overlays.
+document.addEventListener('touchstart',beginTouch,{capture:true,passive:true});
+document.addEventListener('touchmove',moveTouch,{capture:true,passive:false});
+document.addEventListener('touchend',endTouch,{capture:true,passive:true});
+document.addEventListener('touchcancel',()=>{gesture=null;if(turn)animateTo(0)},{capture:true,passive:true});
 // Mouse drag support for the Mac, in addition to the arrow buttons.
 let mouse=null;book.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'||turn)return;mouse={x:e.clientX,y:e.clientY,active:false}});
 window.addEventListener('pointermove',e=>{if(!mouse)return;const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;if(!mouse.active&&Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)){mouse.active=true;showTurn(dx<0?1:-1)}if(mouse.active&&turn)setProgress(Math.abs(dx)/Math.max(120,book.clientWidth*.68))});
