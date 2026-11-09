@@ -1,0 +1,1 @@
+{"name":"Mein Wochenbuch","short_name":"Wochenbuch","description":"Ein persönlicher Wochenplaner zum direkten Beschreiben","start_url":"./index.html","scope":"./","display":"standalone","background_color":"#e8eee7","theme_color":"#e8eee7","icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png"}]}
